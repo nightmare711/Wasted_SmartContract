@@ -76,18 +76,9 @@ interface IWastedKnight {
     function removeItems(uint knightId, uint[] memory itemIds) external;
 
     /**
-     * @notice Burns a knight to claim its `floorPrice`.
-     *
-     * - Not financial advice: DONT DO THAT.
-     * - Remember to remove all items before calling this function.
-     */
-    function sacrificeKnight(uint knightId) external;
-
-    /**
      * @notice Lists a knight on sale.
      *
      * Requirements:
-     * - `price` cannot be under knight's `floorPrice`.
      * - Caller must be the owner of the knight.
      */
     function list(uint knightId, uint price) external;
@@ -118,7 +109,6 @@ interface IWastedKnight {
      * @notice Owner take an offer to sell their knight.
      *
      * Requirements:
-     * - Cannot take offer under knight's `floorPrice`.
      * - Offer value must be at least equal to `minPrice`.
      */
     function takeOffer(uint knightId, address offerAddr, uint minPrice) external;
@@ -142,9 +132,18 @@ interface IWastedKnight {
      * @notice Abandons a Pet attached to a Knight.
      */
     function abandonPet(uint knightId) external;
+    
+    /**
+     * @notice Burn two knights to create one new knight.
+     * 
+     * Requirements:
+     * - caller must be owner of the knights.
+     */
+     
+    function breedingKnight (uint[2] memory knightIds) external;
 
     /**
-     * @notice Operators can level up a Knight
+     * @notice Operators can level up a Knight.
      */
     function levelUp(uint knightId, uint amount) external;
 
@@ -154,7 +153,6 @@ interface IWastedKnight {
     function getKnight(uint knightId) external view returns (
         string memory name,
         uint level,
-        uint floorPrice,
         uint pet,
         uint[] memory skills,
         uint[9] memory equipment
