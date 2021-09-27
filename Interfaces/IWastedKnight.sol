@@ -136,11 +136,23 @@ interface IWastedKnight {
     /**
      * @notice Burn two knights to create one new knight.
      * 
+     * @dev The id of the new knight is the length of the knights array
+     * 
      * Requirements:
      * - caller must be owner of the knights.
      */
-     
-    function breedingKnight (uint[2] memory knightIds) external;
+    function fushionKnight(uint[2] memory knightIds) external;
+    
+    /**
+     * @notice Breed based on two knights.
+     * 
+     * @dev The id of the new knight is the length of the knights array
+     * 
+     * Requirements:
+     * - caller must be owner of the knights.
+     * - Knights's owner can only breeding 7 times at most.
+     */
+    function breedingKnight (uint[2] memory knightIds) external payable;
 
     /**
      * @notice Operators can level up a Knight.
