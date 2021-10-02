@@ -28,7 +28,6 @@ interface IWastedEquipment {
      * Requirements:
      * -  Fee token is required.
      */
-    function rollWastedEquipment(uint vendorId, uint amount) external;
     
     /**
      * @notice Burns ERC1155 equipment since it is equipped to the knight.
