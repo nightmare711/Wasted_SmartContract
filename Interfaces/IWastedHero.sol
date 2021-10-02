@@ -5,6 +5,8 @@ pragma solidity ^0.8.0;
 
 interface IWastedHero {
     
+    enum PackageRarity { RARE, EPIC, LEGENDARY }
+    
     event HeroCreated(uint indexed heroId);
     event HeroListed(uint indexed heroId, uint price);
     event HeroDelisted(uint indexed heroId);
@@ -19,7 +21,7 @@ interface IWastedHero {
     event ItemsRemoved(uint indexed heroId, uint[] itemIds);
     event HeroLeveledUp(uint indexed heroId, uint level, uint amount);
     event StartingIndexFinalized(uint versionId, uint startingIndex);
-    event NewVersionAdded(uint versionId);
+    event NewPoolAdded(uint poolId);
     
     struct Hero {
         string name;
@@ -32,7 +34,7 @@ interface IWastedHero {
     
     struct Pool {
         uint256 indexOfHero;
-        uint256 currentSupplyHeros;
+        uint256 currentSupplyHeroes;
         uint256 maxSupply;
         uint256 startTime;
     }
@@ -47,7 +49,7 @@ interface IWastedHero {
         uint level,
         uint pet,
         uint[] memory skills,
-        uint[9] memory equipment
+        uint[3] memory equipment
     );
     
      /**
@@ -70,7 +72,7 @@ interface IWastedHero {
      * @dev Function take 2 arguments are , new name of hero.
      * 
      */
-    function createHero(uint versionId, uint amount) external payable;
+    function createHero(uint poolId, uint amount, uint rarityPackage) external payable;
 
     /**
      * @notice Function to change Hero's name.
@@ -142,11 +144,11 @@ interface IWastedHero {
      */
     function abortOffer(uint heroId) external;
 
-    /**
-     * @notice Acquire skill for hero by skillId.
-     * 
-     */
-    function acquireSkill(uint heroId, uint skillId) external;
+    // /**
+    //  * @notice Acquire skill for hero by skillId.
+    //  * 
+    //  */
+    // function acquireSkill(uint heroId, uint skillId) external;
 
     /**
      * @notice Adopts a Pet.
@@ -166,7 +168,7 @@ interface IWastedHero {
      * Requirements:
      * - caller must be owner of the heros.
      */
-    function fushionHero(uint[2] memory heroIds) external;
+    function fushionHero(uint fatherId, uint motherId) external payable;
     
     /**
      * @notice Breed based on two heros.
@@ -177,5 +179,5 @@ interface IWastedHero {
      * - caller must be owner of the heros.
      * - Heros's owner can only breeding 7 times at most.
      */
-    function breedingHero (uint[2] memory heroIds) external payable;
+    function breedingHero (uint fatherId, uint motherId) external payable;
 }
