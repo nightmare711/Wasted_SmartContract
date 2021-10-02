@@ -2,17 +2,16 @@
 
 pragma solidity ^0.8.0;
 
-
+import "./IWastedHero.sol";
+import "./AcceptedToken.sol";
+import "./IWastedEquipment.sol";
+import "./IPet.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./IWastedHero.sol";
-import "./AcceptedToken.sol";
-import "./IWastedEquipment.sol";
-import "./IPet.sol";
 
 
 contract WastedHero is  IWastedHero, ERC721, ReentrancyGuard, AcceptedToken {
@@ -503,6 +502,8 @@ contract WastedHero is  IWastedHero, ERC721, ReentrancyGuard, AcceptedToken {
         
         uint heroId = _createHero();
         _safeMint(msg.sender, heroId);
+        heroBreedingTime[fatherId] += 1;
+        heroBreedingTime[motherId] += 1;
         
         (bool isSuccess,) = owner().call{value: msg.value}("");
         require(isSuccess);
