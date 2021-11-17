@@ -1,51 +1,67 @@
 //SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.7;
 
 
-interface IWastedHero {
+interface IWastedWarrior {
     
-    enum PackageRarity { RARE, EPIC, LEGENDARY }
+    enum PackageRarity { NONE, PLASTIC, STEEL, GOLD, PLATINUM }
     
-    event HeroCreated(uint indexed heroId);
-    event HeroListed(uint indexed heroId, uint price);
-    event HeroDelisted(uint indexed heroId);
-    event HeroBought(uint indexed heroId, address buyer, address seller, uint price);
-    event HeroOffered(uint indexed heroId, address buyer, uint price);
-    event HeroOfferCanceled(uint indexed heroId, address buyer);
-    event NameChanged(uint indexed heroId, string newName);
-    event PetAdopted(uint indexed heroId, uint indexed petId);
-    event PetReleased(uint indexed heroId, uint indexed petId);
-    event AcquiredSkill(uint indexed heroId, uint indexed skillId);
-    event ItemsEquipped(uint indexed heroId, uint[] itemIds);
-    event ItemsRemoved(uint indexed heroId, uint[] itemIds);
-    event HeroLeveledUp(uint indexed heroId, uint level, uint amount);
+    event WarriorCreated(uint indexed warriorId, bool isBreed, bool isFusion, uint indexed packageType, address indexed buyer);
+    event WarriorListed(uint indexed warriorId, uint price);
+    event WarriorDelisted(uint indexed warriorId);
+    event WarriorBought(uint indexed warriorId, address buyer, address seller, uint price);
+    event WarriorOffered(uint indexed warriorId, address buyer, uint price);
+    event WarriorOfferCanceled(uint indexed warriorId, address buyer);
+    event NameChanged(uint indexed warriorId, string newName);
+    event PetAdopted(uint indexed warriorId, uint indexed petId);
+    event PetReleased(uint indexed warriorId, uint indexed petId);
+    event AcquiredSkill(uint indexed warriorId, uint indexed skillId);
+    event ItemsEquipped(uint indexed warriorId, uint[] itemIds);
+    event ItemsRemoved(uint indexed warriorId, uint[] itemIds);
+    event WarriorLeveledUp(uint indexed warriorId, uint level, uint amount);
     event StartingIndexFinalized(uint versionId, uint startingIndex);
     event NewPoolAdded(uint poolId);
+    event BreedingWarrior(uint indexed fatherId, uint indexed motherId, uint newId);
+    event FusionWarrior(uint indexed firstWarriorId, uint indexed secondWarriorId, uint newId);
     
-    struct Hero {
+    struct BoughtPackageTimes {
+        uint plastic;
+        uint steel;
+        uint gold;
+        uint platinum;
+    }
+    struct ParentWarrior {
+        uint fatherId;
+        uint motherId;
+    }
+    
+    struct Warrior {
         string name;
         uint256 level;
         uint256 weapon;
         uint256 armor;
         uint256 accessory;
+        bool isBreed;
+        bool isFusion;
     }
     
     
     struct Pool {
-        uint256 indexOfHero;
-        uint256 currentSupplyHeroes;
+        uint256 currentSupplyWarriors;
         uint256 maxSupply;
         uint256 startTime;
     }
     
     /**
-     * @notice Gets hero information.
+     * @notice Gets warrior information.
      * 
      * @dev Prep function for staking.
      */
-    function getHero(uint heroId) external view returns (
+    function getWarrior(uint warriorId) external view returns (
         string memory name,
+        bool isBreed,
+        bool isFusion,
         uint level,
         uint pet,
         uint[] memory skills,
@@ -53,131 +69,131 @@ interface IWastedHero {
     );
     
      /**
-     * @notice Function can level up a Hero.
+     * @notice Function can level up a Warrior.
      * 
      * @dev Prep function for staking.
      */
-    function levelUp(uint heroId, uint amount) external;
+    function levelUp(uint warriorId, uint amount) external;
     
     /**
-     * @notice Get current level of given hero.
+     * @notice Get current level of given warrior.
      * 
      * @dev Prep function for staking.
      */
-    function getHeroLevel(uint heroId) external view returns (uint);
+    function getWarriorLevel(uint warriorId) external view returns (uint);
     
     /**
-     * @notice Claim wasted heros when it's on claimable time.
+     * @notice Claim wasted warriors when it's on claimable time.
      * 
-     * @dev Function take 2 arguments are , new name of hero.
+     * @dev Function take 2 arguments are , new name of warrior.
      * 
      */
-    function createHero(uint poolId, uint amount, uint rarityPackage) external payable;
+    function createWarrior(uint poolId, uint amount, uint rarityPackage) external payable;
 
     /**
-     * @notice Function to change Hero's name.
+     * @notice Function to change Warrior's name.
      *
-     * @dev Function take 2 arguments are heroId, new name of hero.
+     * @dev Function take 2 arguments are warriorId, new name of warrior.
      * 
      * Requirements:
      * - `replaceName` must be a valid string.
      * - `replaceName` is not duplicated.
-     * - You have to pay `serviceFeeToken` to change hero's name.
+     * - You have to pay `serviceFeeToken` to change warrior's name.
      */
-    function rename(uint heroId, string memory replaceName) external;
+    function rename(uint warriorId, string memory replaceName) external;
 
     /**
-     * @notice Owner equips items to their hero by burning ERC1155 Equipment NFTs.
+     * @notice Owner equips items to their warrior by burning ERC1155 Equipment NFTs.
      *
      * Requirements:
-     * - caller must be owner of the hero.
+     * - caller must be owner of the warrior.
      */
-    function equipItems(uint heroId, uint[] memory itemIds) external;
+    function equipItems(uint warriorId, uint[] memory itemIds) external;
 
     /**
-     * @notice Owner removes items from their hero. ERC1155 Equipment NFTs are minted back to the owner.
+     * @notice Owner removes items from their warrior. ERC1155 Equipment NFTs are minted back to the owner.
      *
      * Requirements:
-     * - Caller must be owner of the hero.
+     * - Caller must be owner of the warrior.
      */
-    function removeItems(uint heroId, uint[] memory itemIds) external;
+    function removeItems(uint warriorId, uint[] memory itemIds) external;
 
     /**
-     * @notice Lists a hero on sale.
+     * @notice Lists a warrior on sale.
      *
      * Requirements:
-     * - Caller must be the owner of the hero.
+     * - Caller must be the owner of the warrior.
      */
-    function listing(uint heroId, uint price) external;
+    function listing(uint warriorId, uint price) external;
 
     /**
      * @notice Remove from a list on sale.
      */
-    function delist(uint heroId) external;
+    function delist(uint warriorId) external;
 
     /**
-     * @notice Instant buy a specific hero on sale.
+     * @notice Instant buy a specific warrior on sale.
      *
      * Requirements:
-     * - Caller must be the owner of the hero.
-     * - Target hero must be currently on sale time.
+     * - Caller must be the owner of the warrior.
+     * - Target warrior must be currently on sale time.
      * - Sent value must be exact the same as current listing price.
      * - Owner cannot buy.
      */
-    function buy(uint heroId) external payable;
+    function buy(uint warriorId) external payable;
 
     /**
-     * @notice Gives offer for a hero.
+     * @notice Gives offer for a warrior.
      *
      * Requirements:
      * - Owner cannot offer.
      */
-    function offer(uint heroId, uint offerPrice) external payable;
+    function offer(uint warriorId, uint offerPrice) external payable;
 
     /**
-     * @notice Owner accept an offer to sell their hero.
+     * @notice Owner accept an offer to sell their warrior.
      */
-    function acceptOffer(uint heroId, address buyer) external;
+    function acceptOffer(uint warriorId, address buyer) external;
 
     /**
-     * @notice Abort an offer for a specific hero.
+     * @notice Abort an offer for a specific warrior.
      */
-    function abortOffer(uint heroId) external;
+    function abortOffer(uint warriorId) external;
 
     // /**
-    //  * @notice Acquire skill for hero by skillId.
+    //  * @notice Acquire skill for warrior by skillId.
     //  * 
     //  */
-    // function acquireSkill(uint heroId, uint skillId) external;
+    // function acquireSkill(uint warriorId, uint skillId) external;
 
     /**
      * @notice Adopts a Pet.
      */
-    function adoptPet(uint heroId, uint petId) external;
+    function adoptPet(uint warriorId, uint petId) external;
 
     /**
-     * @notice Abandons a Pet attached to a hero.
+     * @notice Abandons a Pet attached to a warrior.
      */
-    function abandonPet(uint heroId) external;
+    function abandonPet(uint warriorId) external;
     
     /**
-     * @notice Burn two heros to create one new hero.
+     * @notice Burn two warriors to create one new warrior.
      * 
-     * @dev The id of the new hero is the length of the heros array
+     * @dev The id of the new warrior is the length of the warriors array
      * 
      * Requirements:
-     * - caller must be owner of the heros.
+     * - caller must be owner of the warriors.
      */
-    function fushionHero(uint fatherId, uint motherId) external payable;
+    function fusionWarrior(uint firstWarriorId, uint secondWarriorId) external payable;
     
     /**
-     * @notice Breed based on two heros.
+     * @notice Breed based on two warriors.
      * 
-     * @dev The id of the new hero is the length of the heros array
+     * @dev The id of the new warrior is the length of the warriors array
      * 
      * Requirements:
-     * - caller must be owner of the heros.
-     * - Heros's owner can only breeding 7 times at most.
+     * - caller must be owner of the warriors.
+     * - warriors's owner can only breeding 7 times at most.
      */
-    function breedingHero (uint fatherId, uint motherId) external payable;
+    function breedingWarrior (uint fatherId, uint motherId) external payable;
 }

@@ -1,8 +1,8 @@
 //SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.7;
 
-import "./IWastedHero.sol";
+import "./IWastedWarrior.sol";
 import "./AcceptedToken.sol";
 import "./IWastedEquipment.sol";
 import "./IPet.sol";
@@ -14,58 +14,105 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 
-contract WastedHero is  IWastedHero, ERC721, ReentrancyGuard, AcceptedToken {
+contract WastedWarrior is  IWastedWarrior, ERC721, ReentrancyGuard, AcceptedToken {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
     
-    modifier onlyHeroOwner(uint heroId) {
-        require(ownerOf(heroId) == msg.sender, "WastedHero: Caller isn't owner of hero");
+    modifier onlyWarriorOwner(uint warriorId) {
+        require(ownerOf(warriorId) == msg.sender, "WastedWarrior: Caller isn't owner of warrior");
+        _;
+    }
+    modifier onlyDifferentFamily(uint fatherId, uint motherId) {
+        if(_warriors[fatherId].isBreed && _warriors[motherId].isBreed) {
+            require(parentWarriors[fatherId].fatherId != parentWarriors[motherId].fatherId && parentWarriors[fatherId].motherId != parentWarriors[motherId].motherId, "WastedWarrior: Invalid parent");
+            require(parentWarriors[fatherId].fatherId != parentWarriors[motherId].motherId && parentWarriors[fatherId].motherId != parentWarriors[motherId].fatherId, "WastedWarrior: Invalid parent");
+        } else if(_warriors[fatherId].isBreed) {
+            require(parentWarriors[fatherId].fatherId != motherId && parentWarriors[fatherId].motherId != motherId, "WastedWarrior: Invalid parent");
+        } else if(_warriors[motherId].isBreed) {
+            require(parentWarriors[motherId].fatherId != fatherId && parentWarriors[motherId].motherId != fatherId, "WastedWarrior: Invalid parent" );
+        }
         _;
     }
     
     IWastedEquipment public wastedEquipment;
     IPet public wastedPet;
-    Hero[] private _heroes;
+    Warrior[] private _warriors;
     Pool[] public pools;
+    
     
     uint private constant PERCENT = 100;
     uint public marketFeeInPercent = 20;
     uint public serviceFeeInToken = 1e20;
     uint public breedingFee = 0.15 * 1e18;
-    uint public fushionFee = 0.15 * 1e18;
-    uint public rarePackageFee = 0.15 * 1e18;
-    uint public epicPackageFee = 0.2 * 1e18;
-    uint public legendaryPackageFee = 0.3 * 1e18;
+    uint public fusionFee = 0.15 * 1e18;
+    uint public plasticPackageFee = 0.1 * 1e18;
+    uint public steelPackageFee = 0.15 * 1e18;
+    uint public goldPackageFee = 0.2 * 1e18;
+    uint public platinumPackageFee = 0.3 * 1e18;
+    uint8 public maxBoughtPlasticPackageTimes = 8;
+    uint8 public maxBoughtSteelPackageTimes = 4;
+    uint8 public maxBoughtGoldPackageTimes = 2;
+    uint8 public maxBoughtPlatinumPackageTimes = 1;
+    uint public totalSupplyPlasticPackage = 60;
+    uint public totalSupplySteelPackage = 60;
+    uint public totalSupplyGoldPackage = 20;
+    uint public totalSupplyPlatinumPackage = 10;
     uint public maxLevel = 100;
     string private _uri;
     
-    mapping(uint => uint) public heroBreedingTime;
-    mapping(uint => uint) public heroesOnSale;
-    mapping(uint => mapping(address => uint)) public heroesOffers;
+    bytes32 internal keyHash;
+    uint256 internal fee;
+    
+    uint256 public randomResult;
+    
+    mapping(address => BoughtPackageTimes) boughtPackageTimes;
+    mapping(uint => uint) mintedPackages;
+    mapping(uint => ParentWarrior) parentWarriors; 
+    mapping(uint => uint) public warriorBreedingTime;
+    mapping(uint => uint) public warriorsOnSale;
+    mapping(uint => mapping(address => uint)) public warriorsOffers;
     mapping(string => bool) public usedNames;
+    mapping(uint => uint) public rarityPackagesOfWarrior;
 
-    mapping(uint => uint) private _heroesWithPet;
-    mapping(uint => EnumerableSet.UintSet) private _heroeskills;
+    mapping(uint => uint) private _warriorsWithPet;
+    mapping(uint => EnumerableSet.UintSet) private _warriorsSkills;
     constructor(
         IWastedEquipment equipmentAddress,
         IERC20 tokenAccept,
         uint maxSupply,
         uint startTime,
         string memory baseURI
-    ) ERC721("WastedHero", "WAH") AcceptedToken(tokenAccept) {
+    ) ERC721("WastedWarrior", "WAH") AcceptedToken(tokenAccept) {
         wastedEquipment = equipmentAddress;
         _uri = baseURI;
-        pools.push(Pool(0, 0, maxSupply, startTime));
+        pools.push(Pool(0, maxSupply, startTime));
     }
     
+    
     function setWastedEquipment(IWastedEquipment wastedEquipmentAddress) external onlyOwner {
-        require(address(wastedEquipmentAddress) != address(0), "WastedHero: invalid address");
+        require(address(wastedEquipmentAddress) != address(0), "WastedWarrior: invalid address");
         wastedEquipment = wastedEquipmentAddress;
     }
 
     function setWastedPet(IPet wastedPetAddress) external onlyOwner {
         require(address(wastedPetAddress) != address(0));
         wastedPet = wastedPetAddress;
+    }
+    
+    function setMaxBoughtPlasticPackage(uint8 times) external onlyOwner {
+        maxBoughtPlasticPackageTimes = times;
+    }
+    
+    function setMaxBoughtSteelPackage(uint8 times) external onlyOwner {
+        maxBoughtSteelPackageTimes = times;
+    }
+    
+    function setMaxBoughtGoldPackage(uint8 times) external onlyOwner {
+        maxBoughtGoldPackageTimes = times;
+    }
+    
+    function setMaxBoughtPlatinumPackage(uint8 times) external onlyOwner {
+        maxBoughtPlatinumPackageTimes = times;
     }
     
     /**
@@ -75,7 +122,7 @@ contract WastedHero is  IWastedHero, ERC721, ReentrancyGuard, AcceptedToken {
     * - onlyOwner.
     */
     function setMarketFeeInPercent(uint marketFee) external onlyOwner {
-        require(marketFee < PERCENT, "WastedHero: invalid marketFeeInPercent");
+        require(marketFee < PERCENT, "WastedWarrior: invalid marketFeeInPercent");
         marketFeeInPercent = marketFee;
     }
     
@@ -100,13 +147,23 @@ contract WastedHero is  IWastedHero, ERC721, ReentrancyGuard, AcceptedToken {
     }
     
     /**
-    * @notice function to set fushion fee.
+    * @notice function to set  fusion fee.
     * 
     * Requirements: 
     * - onlyOwner.
     */
     function setFusionFee(uint newFusionFee) external onlyOwner {
-        fushionFee = newFusionFee;
+        fusionFee = newFusionFee;
+    }
+     
+    /**
+    * @notice function to set normal package fee.
+    * 
+    * Requirements: 
+    * - onlyOwner.
+    */
+    function setPlasticPackageFee(uint newPlasticPackageFee) external onlyOwner {
+        plasticPackageFee = newPlasticPackageFee;
     }
     
      /**
@@ -115,67 +172,122 @@ contract WastedHero is  IWastedHero, ERC721, ReentrancyGuard, AcceptedToken {
     * Requirements: 
     * - onlyOwner.
     */
-    function setRarePackageFee(uint newRarePackageFee) external onlyOwner {
-        rarePackageFee = newRarePackageFee;
+    function setSteelPackageFee(uint newSteelPackageFee) external onlyOwner {
+        steelPackageFee = newSteelPackageFee;
     }
     
     /**
-    * @notice function to set epic fee.
+    * @notice function to set epic package fee.
     * 
     * Requirements: 
     * - onlyOwner.
     */
-    function setEpicPackageFee(uint newEpicPackageFee) external onlyOwner {
-        epicPackageFee = newEpicPackageFee;
+    function setGoldPackageFee(uint newGoldPackageFee) external onlyOwner {
+        goldPackageFee = newGoldPackageFee;
     }
     
      /**
-    * @notice function to set legendary fee.
+    * @notice function to set mystic package fee.
     * 
     * Requirements: 
     * - onlyOwner.
     */
-    function setLegendaryPackageFee(uint newLegendaryPackageFee) external onlyOwner {
-        legendaryPackageFee = newLegendaryPackageFee;
+    function setPlatinumPackageFee(uint newPlatinumPackageFee) external onlyOwner {
+        platinumPackageFee = newPlatinumPackageFee;
     }
-
+    
+    /**
+    * @notice function to set total supply packages.
+    * 
+    * Requirements: 
+    * - onlyOwner.
+    */
+    function setPlasticPackageSupply(uint newSupplyPackage) external onlyOwner {
+        totalSupplyPlasticPackage = newSupplyPackage;
+    }
+    
+    /**
+    * @notice function to set total supply packages.
+    * 
+    * Requirements: 
+    * - onlyOwner.
+    */
+    function setSteelPackageSupply(uint newSupplyPackage) external onlyOwner {
+        totalSupplySteelPackage = newSupplyPackage;
+    }
+    
+    /**
+    * @notice function to set total supply packages.
+    * 
+    * Requirements: 
+    * - onlyOwner.
+    */
+    function setGoldPackageSupply(uint newSupplyPackage) external onlyOwner {
+        totalSupplyGoldPackage = newSupplyPackage;
+    }
+    
+    /**
+    * @notice function to set total supply packages.
+    * 
+    * Requirements: 
+    * - onlyOwner.
+    */
+    function setPlatinumPackageSupply(uint newSupplyPackage) external onlyOwner {
+        totalSupplyPlatinumPackage = newSupplyPackage;
+    }
+    
     function setMaxLevel(uint newMaxLevel) external onlyOwner {
-        require(newMaxLevel > 0, "WastedHero: invalid max level");
+        require(newMaxLevel > 0, "WastedWarrior: invalid max level");
         maxLevel = newMaxLevel;
     }
 
     function setBaseURI(string memory baseURI) external onlyOwner {
         _uri = baseURI;
     }
+        
+    function getPool(uint poolId) external view returns (
+        uint currentSupplyWarriors,
+        uint maxSupply, 
+        uint startTime
+    ) {
+        Pool memory pool = pools[poolId];
+        currentSupplyWarriors = pool.currentSupplyWarriors;
+        maxSupply = pool.maxSupply;
+        startTime = pool.startTime;
+    }
     
-    function getHero(uint heroId) external view override returns (
+    function getWarrior(uint warriorId) external view override returns (
         string memory name,
+        bool isBreed,
+        bool isFusion,
         uint level,
         uint pet,
         uint[] memory skills,
         uint[3] memory equipment
     ) {
-        Hero memory hero = _heroes[heroId];
+        Warrior memory warrior = _warriors[warriorId];
 
-        uint skillCount = _heroeskills[heroId].length();
+        uint skillCount = _warriorsSkills[warriorId].length();
         uint[] memory skillIds = new uint[](skillCount);
         for (uint i = 0; i < skillCount; i++) {
-            skillIds[i] = _heroeskills[heroId].at(i);
+            skillIds[i] = _warriorsSkills[warriorId].at(i);
         }
 
-        name = hero.name;
-        level = hero.level;
-        pet = _heroesWithPet[heroId];
+        name = warrior.name;
+        level = warrior.level;
+        isBreed = warrior.isBreed;
+        isFusion = warrior.isFusion;
+        pet = _warriorsWithPet[warriorId];
         skills = skillIds;
         equipment = [
-            hero.weapon,
-            hero.armor,
-            hero.accessory
+            warrior.weapon,
+            warrior.armor,
+            warrior.accessory
         ];
     }
     
-    function getHeroLevel(uint heroId) external view override returns (uint) {
-        return _heroes[heroId].level;
+    function getWarriorLevel(uint warriorId) external view override returns (uint) {
+        return _warriors[warriorId].level;
     }
 
     function getLatestPool() public view returns (uint) {
@@ -183,26 +295,24 @@ contract WastedHero is  IWastedHero, ERC721, ReentrancyGuard, AcceptedToken {
     }
 
     function totalSupply() external view returns (uint) {
-        return _heroes.length;
+        return _warriors.length;
     }
 
     function _baseURI() internal view override returns (string memory) {
         return _uri;
     }
     
-    function listing(uint heroId, uint price) external override onlyHeroOwner(heroId) {
-        require(price > 0, "WastedHero: invalid price");
-        heroesOnSale[heroId] = price;
+    function listing(uint warriorId, uint price) external override onlyWarriorOwner(warriorId) {
+        require(price > 0, "WastedWarrior: invalid price");
+        warriorsOnSale[warriorId] = price;
 
-        emit HeroListed(heroId, price);
+        emit WarriorListed(warriorId, price);
     }
     
-    function _makeTransaction(uint heroId, address buyer, address seller, uint price) private {
-        Hero storage hero = _heroes[heroId];
-        
+    function _makeTransaction(uint warriorId, address buyer, address seller, uint price) private {
         uint marketFee = price * marketFeeInPercent / PERCENT;
 
-        heroesOnSale[heroId] = 0;
+        warriorsOnSale[warriorId] = 0;
 
         (bool isTransferToSeller,) = seller.call{value: price - marketFee}("");
         require(isTransferToSeller);
@@ -210,44 +320,44 @@ contract WastedHero is  IWastedHero, ERC721, ReentrancyGuard, AcceptedToken {
         (bool isTransferToTreasury,) = owner().call{value: marketFee}("");
         require(isTransferToTreasury);
 
-        _transfer(seller, buyer, heroId);
+        _transfer(seller, buyer, warriorId);
     }
     
     
-    function _createHero() private returns (uint heroId) {
-        _heroes.push(Hero("", 1, 0, 0, 0));
-        heroId = _heroes.length - 1;
+    function _createWarrior(bool isBreed, bool isFusion, uint packageType) private returns (uint warriorId) {
+        _warriors.push(Warrior("", 1, 0, 0, 0, isBreed, isFusion));
+        warriorId = _warriors.length - 1;
         
-        emit HeroCreated(heroId);
+        emit WarriorCreated(warriorId, isBreed, isFusion, packageType, msg.sender);
     }
     
-    function _removeWastedEquipment(uint heroId, uint[] memory itemIds) private {
-        require(heroesOnSale[heroId] == 0, "WastedHero: cannot change items while on sale");
-        require(itemIds.length > 0, "WastedHero: no item supply");
+    function _removeWastedEquipment(uint warriorId, uint[] memory itemIds) private {
+        require(warriorsOnSale[warriorId] == 0, "WastedWarrior: cannot change items while on sale");
+        require(itemIds.length > 0, "WastedWarrior: no item supply");
         
-        Hero storage hero = _heroes[heroId];
+        Warrior storage warrior = _warriors[warriorId];
         bool[] memory itemSet = new bool[](3);
         
         for (uint i = 0; i < itemIds.length; i++) {
             uint itemId = itemIds[i];
             IWastedEquipment.ItemType itemType = wastedEquipment.getWastedItemType(itemId);
-            require(itemId != 0, "WastedHero: invalid itemId");
-            require(!itemSet[uint(itemType)], "WastedHero: duplicate itemType");
+            require(itemId != 0, "WastedWarrior: invalid itemId");
+            require(!itemSet[uint(itemType)], "WastedWarrior: duplicate itemType");
 
             if (itemType == IWastedEquipment.ItemType.WEAPON) {
-                require(hero.weapon == itemId, "WastedHero: invalid weapon");
-                hero.weapon = 0;
+                require(warrior.weapon == itemId, "WastedWarrior: invalid weapon");
+                warrior.weapon = 0;
                 itemSet[uint(IWastedEquipment.ItemType.WEAPON)] = true;
             } else if (itemType == IWastedEquipment.ItemType.ARMOR) {
-                require(hero.armor == itemId, "WastedHero: invalid armor");
-                hero.armor = 0;
+                require(warrior.armor == itemId, "WastedWarrior: invalid armor");
+                warrior.armor = 0;
                 itemSet[uint(IWastedEquipment.ItemType.ARMOR)] = true;
             } else if (itemType == IWastedEquipment.ItemType.ACCESSORY) {
-                require(hero.accessory == itemId, "WastedHero: invalid accessory");
-                hero.accessory = 0;
+                require(warrior.accessory == itemId, "WastedWarrior: invalid accessory");
+                warrior.accessory = 0;
                 itemSet[uint(IWastedEquipment.ItemType.ACCESSORY)] = true;
             } else {
-                require(false, "WastedHero: invalid item type");
+                require(false, "WastedWarrior: invalid item type");
             }
         }
         
@@ -255,36 +365,36 @@ contract WastedHero is  IWastedHero, ERC721, ReentrancyGuard, AcceptedToken {
     }
     
     
-    function _setWastedEquipment(uint heroId, uint[] memory itemIds) private {
+    function _setWastedEquipment(uint warriorId, uint[] memory itemIds) private {
         
-        require(heroesOnSale[heroId] == 0, "WastedHero: cannot change items while on sale");
-        require(itemIds.length > 0, "WastedHero: no item supply");
+        require(warriorsOnSale[warriorId] == 0, "WastedWarrior: cannot change items while on sale");
+        require(itemIds.length > 0, "WastedWarrior: no item supply");
 
-        Hero storage hero = _heroes[heroId];
+        Warrior storage warrior = _warriors[warriorId];
         bool[] memory itemSet = new bool[](3);
         
 
         for (uint i = 0; i < itemIds.length; i++) {
             uint itemId = itemIds[i];
             IWastedEquipment.ItemType itemType = wastedEquipment.getWastedItemType(itemId);
-            require(itemId != 0, "WastedHero: invalid itemId");
-            require(itemType != IWastedEquipment.ItemType.SKILL, "WastedHero: cannot equip skill book");
-            require(!itemSet[uint(itemType)], "WastedHero: duplicate itemType");
+            require(itemId != 0, "WastedWarrior: invalid itemId");
+            require(itemType != IWastedEquipment.ItemType.SKILL, "WastedWarrior: cannot equip skill book");
+            require(!itemSet[uint(itemType)], "WastedWarrior: duplicate itemType");
 
             if (itemType == IWastedEquipment.ItemType.WEAPON) {
-                require(hero.weapon == 0, "WastedHero: Hero's weapon is equipped");
-                hero.weapon = itemId;
+                require(warrior.weapon == 0, "WastedWarrior: Warrior's weapon is equipped");
+                warrior.weapon = itemId;
                 itemSet[uint(IWastedEquipment.ItemType.WEAPON)] = true;
             } else if (itemType == IWastedEquipment.ItemType.ARMOR) {
-                require(hero.armor == 0, "WastedHero: Hero's armor is equipped");
-                hero.armor = itemId;
+                require(warrior.armor == 0, "WastedWarrior: Warrior's armor is equipped");
+                warrior.armor = itemId;
                 itemSet[uint(IWastedEquipment.ItemType.ARMOR)] = true;
             } else if (itemType == IWastedEquipment.ItemType.ACCESSORY) {
-                require(hero.accessory == 0, "WastedHero: Hero's accessory is equipped");
-                hero.accessory = itemId;
+                require(warrior.accessory == 0, "WastedWarrior: Warrior's accessory is equipped");
+                warrior.accessory = itemId;
                 itemSet[uint(IWastedEquipment.ItemType.ACCESSORY)] = true;
             } else {
-                require(false, "WastedHero: invalid item type");
+                require(false, "WastedWarrior: invalid item type");
             }
         }
     }
@@ -323,38 +433,38 @@ contract WastedHero is  IWastedHero, ERC721, ReentrancyGuard, AcceptedToken {
         return true;
     }
 
-    function delist(uint heroId) external override onlyHeroOwner(heroId) {
-        require(heroesOnSale[heroId] > 0, "WastedHero: Hero isn't on sale");
-        heroesOnSale[heroId] = 0;
+    function delist(uint warriorId) external override onlyWarriorOwner(warriorId) {
+        require(warriorsOnSale[warriorId] > 0, "WastedWarrior: warrior isn't on sale");
+        warriorsOnSale[warriorId] = 0;
 
-        emit HeroDelisted(heroId);
+        emit WarriorDelisted(warriorId);
     }
     
-    function buy(uint heroId) external override payable nonReentrant {
-        uint price = heroesOnSale[heroId];
-        address seller = ownerOf(heroId);
+    function buy(uint warriorId) external override payable nonReentrant {
+        uint price = warriorsOnSale[warriorId];
+        address seller = ownerOf(warriorId);
         address buyer = msg.sender;
         
-        require(buyer != seller, "WastedHero: invalid buyer");
-        require(price > 0, "WastedHero: Hero is not on sale");
-        require(msg.value == price, "WastedHero: must pay equal price");
+        require(buyer != seller, "WastedWarrior: invalid buyer");
+        require(price > 0, "WastedWarrior: Warrior is not on sale");
+        require(msg.value == price, "WastedWarrior: must pay equal price");
 
-        _makeTransaction(heroId, buyer, seller, price);
+        _makeTransaction(warriorId, buyer, seller, price);
 
-        emit HeroBought(heroId, buyer, seller, price);
+        emit WarriorBought(warriorId, buyer, seller, price);
     }
     
-    function offer(uint heroId, uint offerPrice) external override nonReentrant payable {
+    function offer(uint warriorId, uint offerPrice) external override nonReentrant payable {
         address buyer = msg.sender;
-        uint currentOffer = heroesOffers[heroId][buyer];
+        uint currentOffer = warriorsOffers[warriorId][buyer];
         bool needRefund = offerPrice < currentOffer;
         uint requiredValue = needRefund ? 0 : offerPrice - currentOffer;
 
-        require(buyer != ownerOf(heroId), "WastedHero: owner cannot offer");
-        require(offerPrice != currentOffer, "WastedHero: same offer");
-        require(msg.value == requiredValue, "WastedHero: sent value invalid");
+        require(buyer != ownerOf(warriorId), "WastedWarrior: owner cannot offer");
+        require(offerPrice != currentOffer, "WastedWarrior: same offer");
+        require(msg.value == requiredValue, "WastedWarrior: sent value invalid");
 
-        heroesOffers[heroId][buyer] = offerPrice;
+        warriorsOffers[warriorId][buyer] = offerPrice;
 
         if (needRefund) {
             uint returnedValue = currentOffer - offerPrice;
@@ -363,130 +473,151 @@ contract WastedHero is  IWastedHero, ERC721, ReentrancyGuard, AcceptedToken {
             require(success);
         }
 
-        emit HeroOffered(heroId, buyer, offerPrice);
+        emit WarriorOffered(warriorId, buyer, offerPrice);
     }
     
-    function acceptOffer(uint heroId, address buyer) external override nonReentrant onlyHeroOwner(heroId) {
-        uint offeredPrice = heroesOffers[heroId][buyer];
+    function acceptOffer(uint warriorId, address buyer) external override nonReentrant onlyWarriorOwner(warriorId) {
+        uint offeredPrice = warriorsOffers[warriorId][buyer];
         address seller = msg.sender;
 
         require(buyer != seller, "Wasted: invalid buyer");
 
-        heroesOffers[heroId][buyer] = 0;
+        warriorsOffers[warriorId][buyer] = 0;
 
-        _makeTransaction(heroId, buyer, seller, offeredPrice);
+        _makeTransaction(warriorId, buyer, seller, offeredPrice);
 
-        emit HeroBought(heroId, buyer, seller, offeredPrice);
+        emit WarriorBought(warriorId, buyer, seller, offeredPrice);
     }
     
-    function abortOffer(uint heroId) external override nonReentrant {
+    function abortOffer(uint warriorId) external override nonReentrant {
         address caller = msg.sender;
-        uint offerPrice = heroesOffers[heroId][caller];
+        uint offerPrice = warriorsOffers[warriorId][caller];
 
-        require(offerPrice > 0, "WastedHero: offer not found");
+        require(offerPrice > 0, "WastedWarrior: offer not found");
 
-        heroesOffers[heroId][caller] = 0;
+        warriorsOffers[warriorId][caller] = 0;
 
         (bool success,) = caller.call{value: offerPrice}("");
         require(success);
 
-        emit HeroOfferCanceled(heroId, caller);
+        emit WarriorOfferCanceled(warriorId, caller);
     }
     
-    function levelUp(uint heroId, uint amount) external override onlyOperator {
-        Hero storage hero = _heroes[heroId];
-        uint newLevel = hero.level + amount;
+    function levelUp(uint warriorId, uint amount) external override onlyOperator {
+        Warrior storage warrior = _warriors[warriorId];
+        uint newLevel = warrior.level + amount;
 
         require(amount > 0);
-        require(newLevel <= maxLevel, "WastedHero: max level reached");
+        require(newLevel <= maxLevel, "WastedWarrior: max level reached");
 
-        hero.level = newLevel;
+        warrior.level = newLevel;
 
-        emit HeroLeveledUp(heroId, newLevel, amount);
+        emit WarriorLeveledUp(warriorId, newLevel, amount);
     }
     
-    function adoptPet(uint heroId, uint petId) external override onlyHeroOwner(heroId) {
-        require(wastedPet.ownerOf(petId) == msg.sender, "WastedHero: not pet owner");
+    function adoptPet(uint warriorId, uint petId) external override onlyWarriorOwner(warriorId) {
+        require(wastedPet.ownerOf(petId) == msg.sender, "WastedWarrior: not pet owner");
 
-        _heroesWithPet[heroId] = petId;
+        _warriorsWithPet[warriorId] = petId;
         wastedPet.bindPet(petId);
 
-        emit PetAdopted(heroId, petId);
+        emit PetAdopted(warriorId, petId);
     }
 
-    function abandonPet(uint heroId) external override onlyHeroOwner(heroId) {
-        uint petId = _heroesWithPet[heroId];
+    function abandonPet(uint warriorId) external override onlyWarriorOwner(warriorId) {
+        uint petId = _warriorsWithPet[warriorId];
 
-        require(petId != 0, "WastedHero: couldn't found pet");
+        require(petId != 0, "WastedWarrior: couldn't found pet");
 
-        _heroesWithPet[heroId] = 0;
+        _warriorsWithPet[warriorId] = 0;
         wastedPet.releasePet(petId);
 
-        emit PetReleased(heroId, petId);
+        emit PetReleased(warriorId, petId);
     }
     
     
-    function addNewPool( uint indexOfHero, uint maxSupply, uint startTime ) external onlyOwner {
+    function addNewPool( uint maxSupply, uint startTime ) external onlyOwner {
         uint latestPoolId = getLatestPool();
         
-        pools.push(Pool(indexOfHero, 0, maxSupply, startTime));
+        pools.push(Pool( 0, maxSupply, startTime));
         
         emit NewPoolAdded(latestPoolId + 1);
     }
     
-    function rename( uint heroId, string memory replaceName ) external override onlyHeroOwner(heroId) collectTokenAsFee(serviceFeeInToken, owner()) {
-        require(_validateStr(replaceName), "WastedHero: invalid name");
-        require(usedNames[replaceName] == false, "WastedHero: name already exist");
+    function rename( uint warriorId, string memory replaceName ) external override onlyWarriorOwner(warriorId) collectTokenAsFee(serviceFeeInToken, owner()) {
+        require(_validateStr(replaceName), "WastedWarrior: invalid name");
+        require(usedNames[replaceName] == false, "WastedWarrior: name already exist");
 
-        Hero storage hero = _heroes[heroId];
+        Warrior storage warrior = _warriors[warriorId];
         
-        if (bytes(hero.name).length > 0) {
-            usedNames[hero.name] = false;
+        if (bytes(warrior.name).length > 0) {
+            usedNames[warrior.name] = false;
         }
 
-        hero.name = replaceName;
+        warrior.name = replaceName;
         usedNames[replaceName] = true;
 
-        emit NameChanged(heroId, replaceName);
+        emit NameChanged(warriorId, replaceName);
     }
     
-    function equipItems(uint heroId, uint[] memory itemIds) external override onlyHeroOwner(heroId) {
-        _setWastedEquipment(heroId, itemIds);
+    function equipItems(uint warriorId, uint[] memory itemIds) external override onlyWarriorOwner(warriorId) {
+        _setWastedEquipment(warriorId, itemIds);
 
         wastedEquipment.putItemsIntoStorage(msg.sender, itemIds);
 
-        emit ItemsEquipped(heroId, itemIds);
+        emit ItemsEquipped(warriorId, itemIds);
     }
 
-    function removeItems(uint heroId, uint[] memory itemIds) external override onlyHeroOwner(heroId) {
-        _removeWastedEquipment(heroId, itemIds);
+    function removeItems(uint warriorId, uint[] memory itemIds) external override onlyWarriorOwner(warriorId) {
+        _removeWastedEquipment(warriorId, itemIds);
 
         wastedEquipment.returnItems(msg.sender, itemIds);
 
-        emit ItemsRemoved(heroId, itemIds);
+        emit ItemsRemoved(warriorId, itemIds);
     }
     
-    function createHero(uint poolId, uint amount, uint rarityPackage) external override payable {
+    function createWarrior(uint poolId, uint amount, uint rarityPackage) external override payable {
         Pool storage pool = pools[poolId];
+        BoughtPackageTimes storage boughtTimes = boughtPackageTimes[msg.sender];
 
-        require(amount > 0 && amount <= 5, "WastedHero: amount out of range");
-        require(block.timestamp >= pool.startTime, "WastedHero: Pool has not started");
-        require(pool.currentSupplyHeroes + amount <= pool.maxSupply, "WastedHero: sold out");
+        require(amount > 0, "WastedWarrior: amount out of range");
+        require(block.timestamp >= pool.startTime, "WastedWarrior: Pool has not started");
+        require(pool.currentSupplyWarriors + amount <= pool.maxSupply, "WastedWarrior: sold out");
+        require(rarityPackage >= 1 && rarityPackage <= 4, "WastedWarrior: invalid Package");
         
-        if(rarityPackage == uint(IWastedHero.PackageRarity.RARE)) {
-            require(msg.value == rarePackageFee * amount, "WastedHero: not enough fee");
-        } else if (rarityPackage == uint(IWastedHero.PackageRarity.EPIC)) {
-            require(msg.value == epicPackageFee * amount, "WastedHero: not enough fee");
-        } else if (rarityPackage == uint(IWastedHero.PackageRarity.LEGENDARY)) {
-            require(msg.value == legendaryPackageFee * amount, "WastedHero: not enough fee");
+        if(rarityPackage == uint(IWastedWarrior.PackageRarity.PLASTIC)) {
+            require(boughtTimes.plastic < maxBoughtPlasticPackageTimes, "WastedWarrior: not eligible");
+            require(mintedPackages[1] + amount <= totalSupplyPlasticPackage, "WastedWarrior: sold out");
+            require(msg.value == plasticPackageFee * amount, "WastedWarrior: not enough fee");
+            mintedPackages[1] += amount;
+            boughtTimes.plastic += amount;
+        } else if(rarityPackage == uint(IWastedWarrior.PackageRarity.STEEL)) {
+            require(boughtTimes.steel < maxBoughtSteelPackageTimes, "WastedWarrior: not eligible");
+            require(mintedPackages[2] + amount <= totalSupplySteelPackage, "WastedWarrior: sold out");
+            require(msg.value == steelPackageFee * amount, "WastedWarrior: not enough fee");
+            mintedPackages[2] += amount;
+            boughtTimes.steel += amount;
+        } else if (rarityPackage == uint(IWastedWarrior.PackageRarity.GOLD)) {
+            require(boughtTimes.gold < maxBoughtGoldPackageTimes, "WastedWarrior: not eligible");
+            require(mintedPackages[3] + amount <= totalSupplyGoldPackage, "WastedWarrior: sold out");
+            require(msg.value == goldPackageFee * amount, "WastedWarrior: not enough fee");
+            mintedPackages[3] += amount; 
+            boughtTimes.gold += amount;
+        } else if (rarityPackage == uint(IWastedWarrior.PackageRarity.PLATINUM)) {
+            require(boughtTimes.platinum < maxBoughtPlatinumPackageTimes, "WastedWarrior: not eligible");
+            require(mintedPackages[4] + amount <= totalSupplyPlatinumPackage, "WastedWarrior: sold out");
+            require(msg.value == platinumPackageFee * amount, "WastedWarrior: not enough fee");
+            mintedPackages[4] += amount;
+            boughtTimes.platinum += amount;
         }
         
         for (uint i = 0; i < amount; i++) {
-            uint heroId = _createHero();
-            _safeMint(msg.sender, heroId);
+            uint warriorId = _createWarrior(false, false, rarityPackage);
+            rarityPackagesOfWarrior[warriorId] = rarityPackage;
+            _safeMint(msg.sender, warriorId);
         }
 
-        pool.currentSupplyHeroes += amount;
+        pool.currentSupplyWarriors += amount;
        
 
         (bool isSuccess,) = owner().call{value: msg.value}("");
@@ -494,34 +625,37 @@ contract WastedHero is  IWastedHero, ERC721, ReentrancyGuard, AcceptedToken {
 
     }
     
-    function breedingHero (uint fatherId, uint motherId) external override payable {
+    function breedingWarrior(uint fatherId, uint motherId) external override onlyDifferentFamily(fatherId, motherId) payable {
+        require(fatherId != motherId, "WastedWarrior: invalid id");
+        require(ownerOf(fatherId) == msg.sender && ownerOf(motherId) == msg.sender, "WastedWarrior: Caller isn't owner of Warrior");
+        require(warriorBreedingTime[fatherId] <= 7 && warriorBreedingTime[motherId] <= 7, "WastedWarrior: Warrior can only breeding 7 times");
+        require(msg.value == breedingFee, "WastedWarrior: not enough fee");
         
-        require(ownerOf(fatherId) == msg.sender && ownerOf(motherId) == msg.sender, "WastedHero: Caller isn't owner of hero");
-        require(heroBreedingTime[fatherId] <= 7 && heroBreedingTime[motherId] <= 7, "WastedHero: Hero can only breeding 7 times");
-        require(msg.value == breedingFee, "WastedHero: not enough fee");
-        
-        uint heroId = _createHero();
-        _safeMint(msg.sender, heroId);
-        heroBreedingTime[fatherId] += 1;
-        heroBreedingTime[motherId] += 1;
-        
+        uint warriorId = _createWarrior(true, false, 0);
+        _safeMint(msg.sender, warriorId);
+        warriorBreedingTime[fatherId] += 1;
+        warriorBreedingTime[motherId] += 1;
+        parentWarriors[warriorId] = ParentWarrior(fatherId, motherId);
         (bool isSuccess,) = owner().call{value: msg.value}("");
         require(isSuccess);
         
+        emit BreedingWarrior(fatherId, motherId, warriorId);
     }
     
-    function fushionHero(uint fatherId, uint motherId) external override payable {
-        require(ownerOf(fatherId) == msg.sender && ownerOf(motherId) == msg.sender, "WastedHero: Caller isn't owner of hero");
-        require(msg.value == fushionFee, "WastedHero: not enough fee");
+    function fusionWarrior(uint firstWarriorId, uint secondWarriorId) external override payable {
+        require(firstWarriorId != secondWarriorId, "WastedWarrior: invalid id");
+        require(ownerOf(firstWarriorId) == msg.sender && ownerOf(secondWarriorId) == msg.sender, "WastedWarrior: Caller isn't owner of Warrior");
+        require(msg.value ==  fusionFee, "WastedWarrior: not enough fee");
         
-        uint heroId = _createHero();
-        _safeMint(msg.sender, heroId);
+        uint warriorId = _createWarrior(false, true, 0);
+        _safeMint(msg.sender, warriorId);
         
-        _burn(fatherId);
-        _burn(motherId);
+        _burn(firstWarriorId);
+        _burn(secondWarriorId);
         
         (bool isSuccess,) = owner().call{value: msg.value}("");
         require(isSuccess);
+        emit FusionWarrior(firstWarriorId, secondWarriorId, warriorId);
     }
     
 }
